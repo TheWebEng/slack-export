@@ -41,6 +41,7 @@ export class APIService {
     private conversations: Conversation[] = [];
     private startDate: Date | null = null;
     private endDate: Date | null = null;
+    private excludedConversations: string[] = [];
 
     constructor(private state: Conf, _authToken: string, private exportRoot: string,
         startDateISO: string | undefined, endDateISO: string | undefined,
@@ -57,6 +58,12 @@ export class APIService {
                 'Authorization': 'Bearer ' + _authToken
             }
         });
+        
+        // Initialize excluded channels from environment variable
+        const excludedConversationsStr = process.env.EXCLUDED_CONVERSATIONS;
+        if (excludedConversationsStr) {
+            this.excludedConversations = excludedConversationsStr.split(',').map(channel => channel.trim());
+        }
     }
 
     public async export(): Promise<void> {
@@ -86,6 +93,15 @@ export class APIService {
         await this.loadUsers();
         await this.loadConversations();
         for (const conv of this.conversations) {
+            if (typeof conv.name !== 'string') {
+                console.log(chalk.yellow(`    Skipping conversation with non-string name. Full object:`));
+                console.log(JSON.stringify(conv, null, 2));
+                continue;
+            }
+            if (this.excludedConversations.includes(conv.name)) {
+                console.log(chalk.yellow(`    Skipping excluded conv: ${conv.name}`));
+                continue;
+            }            
             await this.writeNewMsgs(conv, this.startDate, this.endDate);
         }
     }
